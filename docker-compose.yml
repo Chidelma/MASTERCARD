@@ -1,0 +1,29 @@
+services:
+  postgres:
+    # Postgres 16.7
+    image: postgres@sha256:a35ec42526e3c522eb13b4d82eddaee875d0ac6ca9eb5cc5607e412854478c71
+    restart: always
+#    volumes:
+#      - ${PWD}/bin/postgres/create-db.sql:/docker-entrypoint-initdb.d/create-db.sql
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: "postgres"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      network: host
+    volumes:
+      - ${PWD}/src:/opt/src
+      - ${PWD}/tests:/opt/tests
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
