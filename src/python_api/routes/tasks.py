@@ -4,10 +4,15 @@ from fastapi import APIRouter, Header, HTTPException, status
 
 from python_api.db.database import SessionDep
 from python_api.db.schemas import Task
-from python_api.models import CreateTask, TaskResponse, TaskRec
+from python_api.models import CreateTask, TaskResponse
 
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+def _get_active_tasks_for_user(db: SessionDep, user_id: int) -> list[TaskResponse]:
+    rows = db.query(Task).filter(Task.user_id == user_id, Task.deleted.is_(False)).all()
+    return [TaskResponse.model_validate(row) for row in rows]
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_task(task: CreateTask, riskrecon_user_id: Annotated[int, Header()], db: SessionDep) -> TaskResponse:
@@ -32,22 +37,29 @@ def create_task(task: CreateTask, riskrecon_user_id: Annotated[int, Header()], d
     return TaskResponse.model_validate(db_task)
 
 
-@router.get("/{user_id}", status_code=status.HTTP_200_OK)
-def get_user_tasks(user_id: str,  db: SessionDep) -> list[TaskRec]:
-
-    tasks: list[TaskRec] = []
-
+@router.get("", status_code=status.HTTP_200_OK)
+def get_my_tasks(riskrecon_user_id: Annotated[int, Header()], db: SessionDep) -> list[TaskResponse]:
     try:
-
-        rows = db.query(Task).filter(Task.user_id==int(user_id), Task.deleted==False).all()
-
-        for row in rows:
-            tasks.append(TaskRec.model_validate(row))
-
+        return _get_active_tasks_for_user(db, riskrecon_user_id)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get task for {user_id}",
+            detail="Failed to get tasks for the authenticated user",
         ) from e
-    
-    return tasks
+
+
+@router.get("/{user_id}", status_code=status.HTTP_200_OK)
+def get_user_tasks(user_id: int, riskrecon_user_id: Annotated[int, Header()], db: SessionDep) -> list[TaskResponse]:
+    if user_id != riskrecon_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Users may only access their own tasks",
+        )
+
+    try:
+        return _get_active_tasks_for_user(db, user_id)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get tasks for {user_id}",
+        ) from e
