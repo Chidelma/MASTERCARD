@@ -6,3 +6,9 @@ __pycache__/
 build/
 dist/
 .DS_Store
+AGENTS.md
+CLAUDE.md
+.github/copilot-instructions.md
+.claude
+.codex
+.vscode
